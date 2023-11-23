@@ -23,15 +23,15 @@ class hydro_opt:
         else:
             self.h2_to_ch3oh_eff = h2_to_ch3oh_eff
         if h2_demand == None:
-            self.h2_demand = 1000000
+            self.h2_demand = 45000000 # 45 TWh
         else:
             self.h2_demand = h2_demand
         if nh3_demand == None:
-            self.nh3_demand = 1000000
+            self.nh3_demand = 3900000 # 3,9 TWh
         else:
             self.nh3_demand = nh3_demand
         if ch3oh_demand == None:
-            self.ch3oh_demand = 1000000
+            self.ch3oh_demand = 3400000 # 3,4 TWh
         else:
             self.ch3oh_demand = ch3oh_demand
         self.instance = None
@@ -219,7 +219,7 @@ class hydro_opt:
         else:
             vis_df = self.results_df
             
-        if what == "combined_import":
+        if what == "combined import":
             fig, ax = plt.subplots(1, 1, figsize=figsize)
             ax.set_title("Import von grünem Wasserstoff und wasserstoffbasierten Chemikalien nach Exportland")
             
@@ -367,7 +367,7 @@ class hydro_opt:
                     axid.set_xlabel("Exportland")
                     max_value = max(positive_values[key].max(),2)
                     axid.set_ylim(bottom=0, top=max_value*1.2)
-                #plt.tight_layout()
+                plt.tight_layout()
                 
             
             
