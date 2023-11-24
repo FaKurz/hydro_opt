@@ -7,7 +7,8 @@ import matplotlib.colors as mcolors
 import geopandas as gpd
 
 class hydro_opt:
-    def __init__(self, input_data = None, h2_to_nh3_eff = None, h2_to_ch3oh_eff = None, h2_demand = None, nh3_demand = None, ch3oh_demand = None):
+    def __init__(self, input_data = None, h2_to_nh3_eff = None, h2_to_ch3oh_eff = None, h2_demand = None, nh3_demand = None, ch3oh_demand = None,
+                 de_el_price = None, de_co2_price = None, h2_to_nh3_el_demand = None, h2_to_ch3oh_el_demand = None, h2_to_ch3oh_co2_demand = None):
         # set default values for variables
         if input_data == None:
             #self.input_data = "Inputdata.xlsx"
@@ -15,11 +16,11 @@ class hydro_opt:
         else:
             self.input_data = input_data
         if h2_to_nh3_eff == None:
-            self.h2_to_nh3_eff = 0.7
+            self.h2_to_nh3_eff = 0.85 # MWh_NH3/MWh_H2
         else:
             self.h2_to_nh3_eff = h2_to_nh3_eff
         if h2_to_ch3oh_eff == None:
-            self.h2_to_ch3oh_eff = 0.6
+            self.h2_to_ch3oh_eff = 0.83 # MWh_CH3OH/MWh_H2
         else:
             self.h2_to_ch3oh_eff = h2_to_ch3oh_eff
         if h2_demand == None:
@@ -33,7 +34,27 @@ class hydro_opt:
         if ch3oh_demand == None:
             self.ch3oh_demand = 3400000 # 3,4 TWh
         else:
-            self.ch3oh_demand = ch3oh_demand
+            self.ch3oh_demand= ch3oh_demand
+        if de_el_price == None:
+            self.de_el_price = 40 # 40 €/MWh
+        else:
+            self.de_el_price = de_el_price
+        if de_co2_price == None:
+            self.de_co2_price = 0 # 0 €/MWh
+        else:
+            self.de_co2_price = de_co2_price#
+        if h2_to_nh3_el_demand == None:
+            self.h2_to_nh3_el_demand = 0.29 # MW_el/MW_NH3
+        else:
+            self.h2_to_nh3_el_demand = h2_to_nh3_el_demand
+        if h2_to_ch3oh_el_demand == None:
+            self.h2_to_ch3oh_el_demand = 0.27 # MW_el/MW_CH3OH
+        else:
+            self.h2_to_ch3oh_el_demand = h2_to_ch3oh_el_demand
+        if h2_to_ch3oh_co2_demand == None:
+            self.h2_to_ch3oh_co2_demand = 0.25 # t_CO2/MWh_CH3OH
+        else:
+            self.h2_to_ch3oh_co2_demand = h2_to_ch3oh_co2_demand
         self.instance = None
         self.results_df = None
         
@@ -101,6 +122,9 @@ class hydro_opt:
                 # hydrogen which will be converted into chemicals
                 + model.h2_amount_to_nh3_pipeline[i]*(model.h2_price_pipeline[i]+model.h2_price_production[i]) + model.h2_amount_to_nh3_ship[i]*(model.h2_price_ship[i]+model.h2_price_production[i])
                 + model.h2_amount_to_ch3oh_pipeline[i]*(model.h2_price_pipeline[i]+model.h2_price_production[i]) + model.h2_amount_to_ch3oh_ship[i]*(model.h2_price_ship[i]+model.h2_price_production[i])
+                # additional electricity and co2 demand for conversion
+                + (model.h2_amount_to_nh3_pipeline[i]+model.h2_amount_to_nh3_ship[i]) * self.h2_to_nh3_eff * (self.de_el_price*self.h2_to_nh3_el_demand)
+                + (model.h2_amount_to_ch3oh_pipeline[i]+model.h2_amount_to_ch3oh_ship[i])*self.h2_to_ch3oh_eff*(self.de_el_price*self.h2_to_nh3_el_demand + self.de_co2_price*self.h2_to_ch3oh_co2_demand)
                 for i in model.country) 
         model.obj = pyo.Objective(sense=pyo.minimize, expr=obj_expr)
         
