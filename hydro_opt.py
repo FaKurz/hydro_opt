@@ -9,7 +9,7 @@ import geopandas as gpd
 class hydro_opt:
     def __init__(self, input_data = None, h2_to_nh3_eff = None, h2_to_ch3oh_eff = None, h2_demand = None, nh3_demand = None, ch3oh_demand = None,
                  de_el_price = None, de_co2_price = None, h2_to_nh3_el_demand = None, h2_to_ch3oh_el_demand = None, h2_to_ch3oh_co2_demand = None,
-                use_transport_limits = None):
+                use_transport_limits = None, h2_ship_limit = None):
         # set default values for variables
         if input_data == None:
             #self.input_data = "Inputdata.xlsx"
@@ -63,6 +63,10 @@ class hydro_opt:
             self.pipeline_limits = pd.read_excel("pipeline_limits.xlsx")
             self.pipeline_routes = pd.read_excel("pipeline_routes.xlsx")
             self.pipeline_transport_limits = None
+        if h2_ship_limit == None:
+            self.h2_ship_limit = 83220000 # 228 GWh/d TYNDP
+        else:
+            self.h2_ship_limit = h2_ship_limit
         self.instance = None
         self.results_df = None
         
@@ -181,7 +185,11 @@ class hydro_opt:
         
         ### only for h2 pipeline
         if self.use_transport_limits:
-            #do stuff
+            
+            # transport limits
+            model.transport_constraints = pyo.ConstraintList()
+            
+            # pipeline
             limits = self.pipeline_limits
             routes = self.pipeline_routes
             
@@ -190,10 +198,6 @@ class hydro_opt:
             routes["from_to"] = routes["Code"] + "_" + routes["Route"].apply(lambda x: x[4:6])# routes["First Transport"]
             
             self.pipeline_transport_limits = pd.merge(routes, limits, how = "left", on = "from_to").fillna(0)
-
-            
-            # transport limits
-            model.pipeline_transport_constraints = pyo.ConstraintList()
             
             for country in model.country:
                 # h2 per pipeline from the country
@@ -206,12 +210,12 @@ class hydro_opt:
                         con_transport_h2_pipeline_lhs += model.h2_amount_pipeline[downstream]
                 else:
                     con_transport_h2_pipeline_rhs = 0
-
-            
-                #con_transport_h2_pipeline_lhs = model.h2_amount_pipeline[country]
                 
-                model.pipeline_transport_constraints.add(con_transport_h2_pipeline_lhs <= con_transport_h2_pipeline_rhs)
-
+                model.transport_constraints.add(con_transport_h2_pipeline_lhs <= con_transport_h2_pipeline_rhs)
+            
+            # ship
+            con_transport_h2_ship_lhs = sum(model.h2_amount_ship[i] for i in model.country)
+            model.transport_constraints.add(con_transport_h2_ship_lhs <= self.h2_ship_limit)
         
         
         ### solve
@@ -386,7 +390,7 @@ class hydro_opt:
             vis_df["H2 Gesamt Schiff"] = vis_df["H2 Schiff"] + vis_df["H2 zu NH3 Schiff"] + vis_df["H2 zu CH3OH Schiff"]
             vis_df["H2 Gesamt Pipeline"] = vis_df["H2 Pipeline"] + vis_df["H2 zu NH3 Pipeline"] + vis_df["H2 zu CH3OH Pipeline"]
             vis_df["H2 für Umwandlung Schiff"] = vis_df["H2 zu NH3 Schiff"] + vis_df["H2 zu CH3OH Schiff"]
-            vis_df["H2 für Umwandlung Pipeline"] = vis_df["H2 zu NH3 Schiff"] + vis_df["H2 zu CH3OH Schiff"]
+            vis_df["H2 für Umwandlung Pipeline"] = vis_df["H2 zu NH3 Pipeline"] + vis_df["H2 zu CH3OH Pipeline"]
 
             if vis_style == "map":
                 vis_df.plot(column='H2 Import', cmap=cmap, ax=ax1, missing_kwds={'color': 'lightgrey'})
