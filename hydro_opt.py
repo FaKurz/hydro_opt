@@ -8,7 +8,8 @@ import geopandas as gpd
 
 class hydro_opt:
     def __init__(self, input_data = None, h2_to_nh3_eff = None, h2_to_ch3oh_eff = None, h2_demand = None, nh3_demand = None, ch3oh_demand = None,
-                 de_el_price = None, de_co2_price = None, h2_to_nh3_el_demand = None, h2_to_ch3oh_el_demand = None, h2_to_ch3oh_co2_demand = None):
+                 de_el_price = None, de_co2_price = None, h2_to_nh3_el_demand = None, h2_to_ch3oh_el_demand = None, h2_to_ch3oh_co2_demand = None,
+                use_transport_limits = None):
         # set default values for variables
         if input_data == None:
             #self.input_data = "Inputdata.xlsx"
@@ -55,6 +56,13 @@ class hydro_opt:
             self.h2_to_ch3oh_co2_demand = 0.25 # t_CO2/MWh_CH3OH
         else:
             self.h2_to_ch3oh_co2_demand = h2_to_ch3oh_co2_demand
+        if use_transport_limits == None:
+            self.use_transport_limits = False
+        else:
+            self.use_transport_limits = True
+            self.pipeline_limits = pd.read_excel("pipeline_limits.xlsx")
+            self.pipeline_routes = pd.read_excel("pipeline_routes.xlsx")
+            self.pipeline_transport_limits = None
         self.instance = None
         self.results_df = None
         
@@ -169,14 +177,42 @@ class hydro_opt:
             con_export_ch3oh_rhs = model.ch3oh_export_limit[i]
             model.export_constraints.add(con_export_ch3oh_lhs <= con_export_h2_rhs)
             model.export_constraints.add(0 <= con_export_ch3oh_lhs)
+        
+        
+        ### only for h2 pipeline
+        if self.use_transport_limits:
+            #do stuff
+            limits = self.pipeline_limits
+            routes = self.pipeline_routes
             
-        ### exchange
-        #model.exchange_contraints = pyo.ContraintList()
-        #for i in model.country:
-        #    con_exchange_nh3_lhs = model.h2_amount_pipeline[i] + model.h2_amount_ship[i]
-        #    con_exchange_nh3_rhs = model.h2_amount_to_nh3[i]
-        #    model.exchange_constraints.add(con_exchange_nh3_lhs >=
+            limits["from_to"] = limits["From Code"] + "_" + limits["To Code"]
+            routes["Downstream"] = routes["Code"].apply(lambda country: routes.loc[routes["Route"].apply(lambda x: "->"+country in x), "Code"].to_list())
+            routes["from_to"] = routes["Code"] + "_" + routes["Route"].apply(lambda x: x[4:6])# routes["First Transport"]
             
+            self.pipeline_transport_limits = pd.merge(routes, limits, how = "left", on = "from_to").fillna(0)
+
+            
+            # transport limits
+            model.pipeline_transport_constraints = pyo.ConstraintList()
+            
+            for country in model.country:
+                # h2 per pipeline from the country
+                con_transport_h2_pipeline_lhs = model.h2_amount_pipeline[country]
+                if country in self.pipeline_transport_limits["Code"].values:
+                    # export limit from read in file
+                    con_transport_h2_pipeline_rhs = self.pipeline_transport_limits.loc[self.pipeline_transport_limits["Code"] == country, "MWh/y"].values[0]
+                    # countries whose export also pass trough the country are added to lhs
+                    for downstream in self.pipeline_transport_limits.loc[self.pipeline_transport_limits["Code"] == country, "Downstream"].values[0]:
+                        con_transport_h2_pipeline_lhs += model.h2_amount_pipeline[downstream]
+                else:
+                    con_transport_h2_pipeline_rhs = 0
+
+            
+                #con_transport_h2_pipeline_lhs = model.h2_amount_pipeline[country]
+                
+                model.pipeline_transport_constraints.add(con_transport_h2_pipeline_lhs <= con_transport_h2_pipeline_rhs)
+
+        
         
         ### solve
         self.instance = model.create_instance()
@@ -406,6 +442,3 @@ class hydro_opt:
         
         if return_df:
             return vis_df
-
-        
-        
