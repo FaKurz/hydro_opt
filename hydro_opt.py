@@ -1,6 +1,5 @@
 import pyomo.environ as pyo
 import pandas as pd
-import seaborn as sns
 import matplotlib.pyplot as plt
 import matplotlib.cm as cm
 import matplotlib.colors as mcolors
@@ -9,13 +8,14 @@ import geopandas as gpd
 class hydro_opt:
     def __init__(self, input_data = None, h2_to_nh3_eff = None, h2_to_ch3oh_eff = None, h2_demand = None, nh3_demand = None, ch3oh_demand = None,
                  de_el_price = None, de_co2_price = None, h2_to_nh3_el_demand = None, h2_to_ch3oh_el_demand = None, h2_to_ch3oh_co2_demand = None,
-                use_transport_limits = None, h2_ship_limit = None):
+                use_import_limits = None, h2_ship_limit = None):
         # set default values for variables
         if input_data == None:
             #self.input_data = "Inputdata.xlsx"
-            self.input_data = pd.read_excel("Inputdata.xlsx", index_col="Land", keep_default_na=False)
+            self.input_data = pd.read_excel("Inputdata.xlsx", index_col="Code", keep_default_na=False)
         else:
             self.input_data = input_data
+            self.input_data = pd.read_excel(inputdata, index_col="Code", keep_default_na=False)
         if h2_to_nh3_eff == None:
             self.h2_to_nh3_eff = 0.85 # MWh_NH3/MWh_H2
         else:
@@ -25,11 +25,11 @@ class hydro_opt:
         else:
             self.h2_to_ch3oh_eff = h2_to_ch3oh_eff
         if h2_demand == None:
-            self.h2_demand = 45000000 # 45 TWh
+            self.h2_demand = 67500000 # 67.5 TWh
         else:
             self.h2_demand = h2_demand
         if nh3_demand == None:
-            self.nh3_demand = 3900000 # 3,9 TWh
+            self.nh3_demand = 3500000 # 3,5 TWh
         else:
             self.nh3_demand = nh3_demand
         if ch3oh_demand == None:
@@ -37,11 +37,11 @@ class hydro_opt:
         else:
             self.ch3oh_demand= ch3oh_demand
         if de_el_price == None:
-            self.de_el_price = 40 # 40 €/MWh
+            self.de_el_price = 45 # €/MWh
         else:
             self.de_el_price = de_el_price
         if de_co2_price == None:
-            self.de_co2_price = 0 # 0 €/MWh
+            self.de_co2_price = 111 # €/t
         else:
             self.de_co2_price = de_co2_price#
         if h2_to_nh3_el_demand == None:
@@ -56,13 +56,13 @@ class hydro_opt:
             self.h2_to_ch3oh_co2_demand = 0.25 # t_CO2/MWh_CH3OH
         else:
             self.h2_to_ch3oh_co2_demand = h2_to_ch3oh_co2_demand
-        if use_transport_limits == None:
-            self.use_transport_limits = False
+        if use_import_limits == None:
+            self.use_import_limits = False
         else:
-            self.use_transport_limits = True
+            self.use_import_limits = True
             self.pipeline_limits = pd.read_excel("pipeline_limits.xlsx")
             self.pipeline_routes = pd.read_excel("pipeline_routes.xlsx")
-            self.pipeline_transport_limits = None
+            self.pipeline_import_limits = None
         if h2_ship_limit == None:
             self.h2_ship_limit = 83220000 # 228 GWh/d TYNDP
         else:
@@ -184,10 +184,10 @@ class hydro_opt:
         
         
         ### only for h2 pipeline
-        if self.use_transport_limits:
+        if self.use_import_limits:
             
-            # transport limits
-            model.transport_constraints = pyo.ConstraintList()
+            # import limits
+            model.import_constraints = pyo.ConstraintList()
             
             # pipeline
             limits = self.pipeline_limits
@@ -197,25 +197,25 @@ class hydro_opt:
             routes["Downstream"] = routes["Code"].apply(lambda country: routes.loc[routes["Route"].apply(lambda x: "->"+country in x), "Code"].to_list())
             routes["from_to"] = routes["Code"] + "_" + routes["Route"].apply(lambda x: x[4:6])# routes["First Transport"]
             
-            self.pipeline_transport_limits = pd.merge(routes, limits, how = "left", on = "from_to").fillna(0)
+            self.pipeline_import_limits = pd.merge(routes, limits, how = "left", on = "from_to").fillna(0)
             
             for country in model.country:
                 # h2 per pipeline from the country
-                con_transport_h2_pipeline_lhs = model.h2_amount_pipeline[country]
-                if country in self.pipeline_transport_limits["Code"].values:
+                con_import_h2_pipeline_lhs = model.h2_amount_pipeline[country] + model.h2_amount_to_nh3_pipeline[country] + model.h2_amount_to_ch3oh_pipeline[country]
+                if country in self.pipeline_import_limits["Code"].values:
                     # export limit from read in file
-                    con_transport_h2_pipeline_rhs = self.pipeline_transport_limits.loc[self.pipeline_transport_limits["Code"] == country, "MWh/y"].values[0]
+                    con_import_h2_pipeline_rhs = self.pipeline_import_limits.loc[self.pipeline_import_limits["Code"] == country, "MWh/y"].values[0]
                     # countries whose export also pass trough the country are added to lhs
-                    for downstream in self.pipeline_transport_limits.loc[self.pipeline_transport_limits["Code"] == country, "Downstream"].values[0]:
-                        con_transport_h2_pipeline_lhs += model.h2_amount_pipeline[downstream]
+                    for downstream in self.pipeline_import_limits.loc[self.pipeline_import_limits["Code"] == country, "Downstream"].values[0]:
+                        con_import_h2_pipeline_lhs += model.h2_amount_pipeline[downstream] + model.h2_amount_to_nh3_pipeline[downstream] + model.h2_amount_to_ch3oh_pipeline[downstream]
                 else:
-                    con_transport_h2_pipeline_rhs = 0
+                    con_import_h2_pipeline_rhs = 0
                 
-                model.transport_constraints.add(con_transport_h2_pipeline_lhs <= con_transport_h2_pipeline_rhs)
+                model.import_constraints.add(con_import_h2_pipeline_lhs <= con_import_h2_pipeline_rhs)
             
             # ship
-            con_transport_h2_ship_lhs = sum(model.h2_amount_ship[i] for i in model.country)
-            model.transport_constraints.add(con_transport_h2_ship_lhs <= self.h2_ship_limit)
+            con_import_h2_ship_lhs = sum(model.h2_amount_ship[i]+model.h2_amount_to_nh3_ship[i]+model.h2_amount_to_ch3oh_ship[i] for i in model.country)
+            model.import_constraints.add(con_import_h2_ship_lhs <= self.h2_ship_limit)
         
         
         ### solve
