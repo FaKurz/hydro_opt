@@ -41,7 +41,7 @@ class hydro_opt:
         else:
             self.de_el_price = de_el_price
         if de_co2_price == None:
-            self.de_co2_price = 111 # €/t
+            self.de_co2_price = 188 # €/t
         else:
             self.de_co2_price = de_co2_price#
         if h2_to_nh3_el_demand == None:
@@ -136,7 +136,7 @@ class hydro_opt:
                 + model.h2_amount_to_ch3oh_pipeline[i]*(model.h2_price_pipeline[i]+model.h2_price_production[i]) + model.h2_amount_to_ch3oh_ship[i]*(model.h2_price_ship[i]+model.h2_price_production[i])
                 # additional electricity and co2 demand for conversion
                 + (model.h2_amount_to_nh3_pipeline[i]+model.h2_amount_to_nh3_ship[i]) * self.h2_to_nh3_eff * (self.de_el_price*self.h2_to_nh3_el_demand)
-                + (model.h2_amount_to_ch3oh_pipeline[i]+model.h2_amount_to_ch3oh_ship[i])*self.h2_to_ch3oh_eff*(self.de_el_price*self.h2_to_nh3_el_demand + self.de_co2_price*self.h2_to_ch3oh_co2_demand)
+                + (model.h2_amount_to_ch3oh_pipeline[i]+model.h2_amount_to_ch3oh_ship[i])*self.h2_to_ch3oh_eff*(self.de_el_price*self.h2_to_ch3oh_el_demand + self.de_co2_price*self.h2_to_ch3oh_co2_demand)
                 for i in model.country) 
         model.obj = pyo.Objective(sense=pyo.minimize, expr=obj_expr)
         
