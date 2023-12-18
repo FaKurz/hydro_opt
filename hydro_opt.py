@@ -8,7 +8,7 @@ import geopandas as gpd
 class hydro_opt:
     def __init__(self, input_data = None, h2_to_nh3_eff = None, h2_to_ch3oh_eff = None, h2_demand = None, nh3_demand = None, ch3oh_demand = None,
                  de_el_price = None, de_co2_price = None, h2_to_nh3_el_demand = None, h2_to_ch3oh_el_demand = None, h2_to_ch3oh_co2_demand = None,
-                use_import_limits = None, h2_ship_limit = None):
+                use_import_limits = None, h2_ship_limit = None, h2_to_nh3_plant_cost = None, h2_to_ch3oh_plant_cost = None):
         # set default values for variables
         if input_data == None:
             #self.input_data = "Inputdata.xlsx"
@@ -67,6 +67,14 @@ class hydro_opt:
             self.h2_ship_limit = 83220000 # 228 GWh/d TYNDP
         else:
             self.h2_ship_limit = h2_ship_limit
+        if h2_to_nh3_plant_cost == None:
+            self.h2_to_nh3_plant_cost = 32.09 # $/MWh_NH3
+        else:
+            self.h2_to_nh3_plant_cost = h2_to_nh3_plant_cost
+        if h2_to_ch3oh_plant_cost == None:
+            self.h2_to_ch3oh_plant_cost = 99.9 # $/MWh_CH3OH
+        else:
+            self.h2_to_ch3oh_plant_cost = h2_to_ch3oh_plant_cost
         self.instance = None
         self.results_df = None
         
@@ -135,8 +143,8 @@ class hydro_opt:
                 + model.h2_amount_to_nh3_pipeline[i]*(model.h2_price_pipeline[i]+model.h2_price_production[i]) + model.h2_amount_to_nh3_ship[i]*(model.h2_price_ship[i]+model.h2_price_production[i])
                 + model.h2_amount_to_ch3oh_pipeline[i]*(model.h2_price_pipeline[i]+model.h2_price_production[i]) + model.h2_amount_to_ch3oh_ship[i]*(model.h2_price_ship[i]+model.h2_price_production[i])
                 # additional electricity and co2 demand for conversion
-                + (model.h2_amount_to_nh3_pipeline[i]+model.h2_amount_to_nh3_ship[i]) * self.h2_to_nh3_eff * (self.de_el_price*self.h2_to_nh3_el_demand)
-                + (model.h2_amount_to_ch3oh_pipeline[i]+model.h2_amount_to_ch3oh_ship[i])*self.h2_to_ch3oh_eff*(self.de_el_price*self.h2_to_ch3oh_el_demand + self.de_co2_price*self.h2_to_ch3oh_co2_demand)
+                + (model.h2_amount_to_nh3_pipeline[i]+model.h2_amount_to_nh3_ship[i]) * self.h2_to_nh3_eff * (self.de_el_price*self.h2_to_nh3_el_demand + self.h2_to_nh3_plant_cost)
+                + (model.h2_amount_to_ch3oh_pipeline[i]+model.h2_amount_to_ch3oh_ship[i])*self.h2_to_ch3oh_eff*(self.de_el_price*self.h2_to_ch3oh_el_demand + self.de_co2_price*self.h2_to_ch3oh_co2_demand + self.h2_to_ch3oh_plant_cost)
                 for i in model.country) 
         model.obj = pyo.Objective(sense=pyo.minimize, expr=obj_expr)
         
