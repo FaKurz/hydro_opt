@@ -14,8 +14,8 @@ class hydro_opt:
             #self.input_data = "Inputdata.xlsx"
             self.input_data = pd.read_excel("Inputdata.xlsx", index_col="Code", keep_default_na=False)
         else:
-            self.input_data = input_data
-            self.input_data = pd.read_excel(inputdata, index_col="Code", keep_default_na=False)
+            #self.input_data = input_data
+            self.input_data = pd.read_excel(input_data, index_col="Code", keep_default_na=False)
         if h2_to_nh3_eff == None:
             self.h2_to_nh3_eff = 0.85 # MWh_NH3/MWh_H2
         else:
